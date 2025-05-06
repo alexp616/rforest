@@ -123,7 +123,6 @@ void zz_mpnfft_mpn_to_poly(zz_mpnfft_poly_t P, mp_limb_t* up, size_t un,
       P->size = 0;
       return;
     }
-
   zz_mpnfft_poly_alloc(P);
 
   unsigned lgN = P->params->lgN;

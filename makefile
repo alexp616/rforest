@@ -1,15 +1,17 @@
 CC = gcc
 ##### using -fPIC slows things down by a few percent, not a big deal
 CFLAGS = -O3 -fPIC -fomit-frame-pointer -funroll-loops -m64 -pedantic -std=gnu11
+# debug version
+# CFLAGS = -g -fPIC -fomit-frame-pointer -funroll-loops -m64 -pedantic -std=gnu11
 LDFLAGS =
-INCLUDES = -I/usr/local/include
+INCLUDES = -I/usr/local/include -Iinclude -Iinclude/fft62
 LIBS = -L/usr/local/lib -lgmp -lm
 INSTALL_ROOT = /usr/local
 
-MPZFFTHEADERS = zzcrt.h zzmem.h zzmisc.h mpzfft_moduli.h mpnfft.h mpnfft_mod.h fermat.h split.h reduce.h split_reduce.h crt.h recompose.h crt_recompose.h  fft62/arith128.h fft62/mod62.h fft62/fft62.h
-MPZFFTOBJECTS = zzmisc.o moduli.o split.o reduce.o split_reduce.o crt.o recompose.o crt_recompose.o mpnfft.o fermat.o mpnfft_mod.o mpzfft.o fft62/mod62.o fft62/fft62.o zzmem.o
-RFORESTHEADERS = hwmpz.h hwmpz_tune.h hwmem.h rtree.h
-RFORESTOBJECTS = hwmpz.o hwmpz_tune.o hwmem.o rtree.o rforest.o
+MPZFFTHEADERS = include/zzcrt.h include/zzmem.h include/zzmisc.h include/mpzfft_moduli.h include/mpnfft.h include/mpnfft_mod.h include/fermat.h include/split.h include/reduce.h include/split_reduce.h include/crt.h include/recompose.h include/crt_recompose.h  include/fft62/arith128.h include/fft62/mod62.h include/fft62/fft62.h
+MPZFFTOBJECTS = build/zzmisc.o build/moduli.o build/split.o build/reduce.o build/split_reduce.o build/crt.o build/recompose.o build/crt_recompose.o build/mpnfft.o build/fermat.o build/mpnfft_mod.o build/mpzfft.o build/fft62/mod62.o build/fft62/fft62.o build/zzmem.o
+RFORESTHEADERS = include/hwmpz.h include/hwmpz_tune.h include/hwmem.h include/rtree.h
+RFORESTOBJECTS = build/hwmpz.o build/hwmpz_tune.o build/hwmem.o build/rtree.o build/rforest.o
 HEADERS = $(MPZFFTHEADERS) $(RFORESTHEADERS)
 OBJECTS = $(MPZFFTOBJECTS) $(RFORESTOBJECTS)
 PROGRAMS = test_rforest
@@ -17,7 +19,7 @@ PROGRAMS = test_rforest
 all: librforest.a $(PROGRAMS)
 
 clean:
-	rm -f *.o
+	rm -f *.o build/*.o build/fft62/*.o
 	rm -f librforest.a $(PROGRAMS)
 
 install: all
@@ -35,77 +37,83 @@ librforest.a: $(OBJECTS)
 test_rforest: test_rforest.o librforest.a rforest.h
 	$(CC) $(LDFLAGS) -o $@ $< librforest.a $(LIBS)
 
+sigma: sigma.o librforest.a rforest.h
+	$(CC) $(LDFLAGS) -o $@ $< librforest.a $(LIBS)
+
 ##### hwlpoly modules
 
-hwmem.o: hwmem.c hwmem.h
+build/hwmem.o: src/hwmem.c include/hwmem.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-hwmpz.o: hwmpz.c hwmpz.h
+build/hwmpz.o: src/hwmpz.c include/hwmpz.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-hwmpz_tune.o: hwmpz_tune.c hwmem.h hwmpz.h
+build/hwmpz_tune.o: src/hwmpz_tune.c include/hwmem.h include/hwmpz.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-rtree.o: rtree.c rtree.h hwmem.h hwmpz.h
+build/rtree.o: src/rtree.c include/rtree.h include/hwmem.h include/hwmpz.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-rforest.o: rforest.c rforest.h hwmem.h hwmpz.h
+build/rforest.o: src/rforest.c include/rforest.h include/hwmem.h include/hwmpz.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-test_rforest.o: test_rforest.c rforest.h hwmem.h hwmpz.h
+test_rforest.o: test_rforest.c include/rforest.h include/hwmem.h include/hwmpz.h
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
+
+sigma.o: sigma.c include/rforest.h include/hwmem.h include/hwmpz.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
 ##### mpzfft C modules
 
-zzmisc.o: zzmisc.c mpzfft.h
+build/zzmisc.o: src/zzmisc.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-moduli.o : moduli.c mpzfft.h
+build/moduli.o : src/moduli.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-split.o : split.c mpzfft.h
+build/split.o : src/split.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-reduce.o : reduce.c mpzfft.h
+build/reduce.o : src/reduce.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-split_reduce.o : split_reduce.c mpzfft.h
+build/split_reduce.o : src/split_reduce.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-recompose.o : recompose.c mpzfft.h
+build/recompose.o : src/recompose.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-crt.o : crt.c mpzfft.h
+build/crt.o : src/crt.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-crt_recompose.o : crt_recompose.c mpzfft.h
+build/crt_recompose.o : src/crt_recompose.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-mpnfft.o : mpnfft.c mpzfft.h
+build/mpnfft.o : src/mpnfft.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-fermat.o : fermat.c mpzfft.h
+build/fermat.o : src/fermat.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-mpnfft_mod.o : mpnfft_mod.c mpzfft.h
+build/mpnfft_mod.o : src/mpnfft_mod.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-mpzfft.o : mpzfft.c mpzfft.h
+build/mpzfft.o : src/mpzfft.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-zzmem.o : zzmem.c mpzfft.h
+build/zzmem.o : src/zzmem.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-fft62/mod62.o : fft62/mod62.c mpzfft.h
+build/fft62/mod62.o : src/fft62/mod62.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
-fft62/fft62.o : fft62/fft62.c mpzfft.h
+build/fft62/fft62.o : src/fft62/fft62.c include/mpzfft.h
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 
 ##### master header files
 
 mpzfft.h: $(MPZFFTHEADERS)
-	touch mpzfft.h
+	touch include/mpzfft.h
 
 rforest.h: $(HEADERS)
-	touch rforest.h
+	touch include/rforest.h
