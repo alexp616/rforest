@@ -34,22 +34,10 @@ unsigned fft62_log2(size_t n)
   return bits + ((0x4444444433332210ULL >> (4 * n)) & 15);
 }
 
-
-
 // finds primitive (2^FFT62_MAX_LGN)-th root mod p
-static uint64_t fft62_primitive_root(uint64_t p, uint64_t pinv)
-{
-  uint64_t N = (uint64_t) 1 << FFT62_MAX_LGN;
-
-  for (uint64_t u = 2; ; u++)
-    {
-      uint64_t w = mod62_pow_pinv(u, (p - 1) / N, p, pinv);
-      if (mod62_pow_pinv(w, N / 2, p, pinv) != 1)
-	return w;
-    }
+static inline uint64_t fft62_primitive_root(uint64_t p, uint64_t pinv) {
+  return fft62_primitive_root_2(p, pinv, FFT62_MAX_LGN);
 }
-
-
 
 void fft62_mod_init(fft62_mod_t* mod, uint64_t p)
 {

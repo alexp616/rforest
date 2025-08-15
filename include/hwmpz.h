@@ -20,6 +20,10 @@ static inline int _si_len (int64_t x) { return 64-__builtin_clzl(x<0?-x:x); }
 void hw_mpz_setup ();
 void hw_mpz_clear ();
 
+typedef struct cu_zz_moduli_t cu_zz_moduli_t;
+extern void cu_zz_moduli_init(cu_zz_moduli_t* moduli, int numPrimes);
+extern void cu_zz_moduli_clear(cu_zz_moduli_t* moduli);
+
 // handy mpz inlines
 static inline int mpz_is_zero (mpz_t x) { return mpz_sgn(x) ? 0 : 1; }
 static inline void mpz_set_zero (mpz_t o) { mpz_set_ui (o,0); }

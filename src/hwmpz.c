@@ -13,12 +13,17 @@ int hw_disable_fft;
 int mpzfft_threads = 1; // setting this to a value other than 1 is typically not all that helpful (better to parallelize at a higher level)
 
 static zz_moduli_t zz_moduli;
+extern cu_zz_moduli_t* cu_zz_moduli;
+extern cu_zz_moduli_t* create_cu_zz_moduli_t();
+
 static int mpzfft_initialized;
 
 static inline void hw_mpzfft_setup ()
 {
     if ( hw_disable_fft || mpzfft_initialized ) return;
     zz_moduli_init (&zz_moduli, ZZ_MAX_PRIMES);
+    cu_zz_moduli = create_cu_zz_moduli_t();
+    cu_zz_moduli_init (cu_zz_moduli, ZZ_MAX_PRIMES);
 #if HW_MEM_TRACKING
     extern unsigned long zz_overhead;
     zz_overhead = zz_mem_peak;
@@ -30,6 +35,7 @@ static inline void hw_mpzfft_clear ()
 {
     if ( hw_disable_fft || ! mpzfft_initialized ) return;
     zz_moduli_clear (&zz_moduli);
+    cu_zz_moduli_clear (cu_zz_moduli);
     mpzfft_initialized = 0;
 }
 

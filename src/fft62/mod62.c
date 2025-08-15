@@ -25,39 +25,6 @@ uint64_t mod62_pow(uint64_t x, uint64_t n, uint64_t p)
 }
 
 
-uint64_t mod62_pow_pinv(uint64_t x, uint64_t n, uint64_t p, uint64_t pinv)
-{
-  if (n == 0)
-    return 1;
-
-  if (n == 1)
-    return x;
-
-  if (n == 2)
-    return mod62_mul_pinv(x, x, p, pinv);
-
-  uint64_t u = x;         // x^(2^i), in [0, 2p)
-
-  // reduce to case n odd
-
-  for (; !(n & 1); n >>= 1)
-    u = mod62_mul_pinv_lazy2(u, u, p, pinv);
-
-  // handle rest of bits of n
-
-  uint64_t acc = u;       // accumulator, in [0, 2p)
-
-  for (n >>= 1; n != 0; n >>= 1)
-    {
-      u = mod62_mul_pinv_lazy2(u, u, p, pinv);
-      if (n & 1)
-	acc = mod62_mul_pinv_lazy2(acc, u, p, pinv);
-    }
-
-  return mod63_reduce2(acc, p);
-}
-
-
 uint64_t mod62_2exp(int k, uint64_t p, uint64_t pinv)
 {
   // todo: surely we can do better than this!!!

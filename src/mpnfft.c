@@ -12,7 +12,23 @@
 #include "fft62/fft62.h"
 #include "fft62/mod62.h"
 #include "zzmem.h"
+#include "fft62/cufft62_thresholds.h"
 
+size_t nextpow2(size_t n) {
+  if (n == 0) return 1;
+
+  n--;
+  n |= n >> 1;
+  n |= n >> 2;
+  n |= n >> 4;
+  n |= n >> 8;
+  n |= n >> 16;
+  #if ULONG_MAX > 0xFFFFFFFF
+  n |= n >> 32;
+  #endif
+
+  return n + 1;
+}
 
 void zz_mpnfft_params_init(zz_mpnfft_params_t* params, size_t bits,
 			   size_t terms, unsigned num_primes,
@@ -65,10 +81,16 @@ void zz_mpnfft_params_init(zz_mpnfft_params_t* params, size_t bits,
 	{
 	  // done
 	  unsigned lgN = fft62_log2(points);
+    
 	  params->r = r;
 	  params->lgN = lgN; 
 	  params->N = (size_t) 1 << lgN;
-	  params->points = fft62_next_size(points, lgN);
+    if (lgN >= GPU_MIN_THRESHOLD && lgN <= GPU_MAX_THRESHOLD) {
+       params->points = params->N;
+    } else {
+      params->points = fft62_next_size(points, lgN);
+    }
+    
 	  return;
 	}
       // otherwise decrease r and try again
@@ -79,6 +101,7 @@ void zz_mpnfft_params_init(zz_mpnfft_params_t* params, size_t bits,
 
 void zz_mpnfft_poly_init(zz_mpnfft_poly_t P, zz_mpnfft_params_t* params)
 {
+  // printf("params->points: %d\n", params->points);
   P->params = params;
   P->size = 0;
   P->data[0] = NULL;
@@ -348,6 +371,12 @@ void zz_mpnfft_poly_sub(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op1,
   rop->size = size_max;
 }
 
+typedef struct cu_zz_moduli_t cu_zz_moduli_t;
+extern cu_zz_moduli_t* cu_zz_moduli;
+typedef struct cu_fft62_mod_t cu_fft62_mod_t;
+cu_fft62_mod_t* get_mod_num(cu_zz_moduli_t* mod, int i);
+extern void cu_fft62_fft(uint64_t* yp, uint64_t* xp, size_t size, unsigned lgN, cu_fft62_mod_t* mod);
+extern void cu_fft62_ifft(uint64_t* yp, uint64_t* xp, unsigned lgN, cu_fft62_mod_t* mod);
 
 void zz_mpnfft_poly_fft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
 			int threads)
@@ -359,7 +388,7 @@ void zz_mpnfft_poly_fft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
       rop->size = 0;
       return;
     }
-
+  assert(rop == op);
   zz_mpnfft_poly_alloc(rop);
 
   zz_moduli_t* moduli = rop->params->moduli;
@@ -369,12 +398,18 @@ void zz_mpnfft_poly_fft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
 
   unsigned teams = zz_gcd(threads, num_primes);
   unsigned threads2 = threads / teams;
-
-//#pragma omp parallel for num_threads(teams) schedule(static)
+  // printf("fft points: %lu, size: %lu, lgN: %d\n", points, op->size, lgN);
+// #pragma omp parallel for num_threads(teams) schedule(sta  tic)
   for (unsigned i = 0; i < num_primes; i++)
     {
-      fft62_fft(rop->data[i], points, op->data[i], op->size, lgN,
+      if (lgN >= GPU_MIN_THRESHOLD && lgN <= GPU_MAX_THRESHOLD) {
+        // printf("npru: %lu, p: %lu ", moduli->fft62_mod[i].rtab[12], moduli->fft62_mod[i].p);
+        cu_fft62_fft(rop->data[i], op->data[i], op->size, lgN, get_mod_num(cu_zz_moduli, i));
+      } else {
+        fft62_fft(rop->data[i], points, op->data[i], op->size, lgN,
 		&moduli->fft62_mod[i], threads2);
+      }
+      
     }
 
   rop->size = points;
@@ -403,18 +438,28 @@ void zz_mpnfft_poly_ifft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
 
   unsigned teams = zz_gcd(threads, num_primes);
   unsigned threads2 = threads / teams;
-
+  // printf("ifft points: %lu\n", points);
 //#pragma omp parallel for num_threads(teams) schedule(static)
+  // for (unsigned i = 0; i < num_primes; i++)
   for (unsigned i = 0; i < num_primes; i++)
     {
       fft62_mod_t* mod = &moduli->fft62_mod[i];
       uint64_t* src = op->data[i];
       uint64_t* dst = rop->data[i];
-
-      fft62_ifft(dst, points, src, lgN, mod, threads2);
-
-      if (scale)
+      if (lgN >= GPU_MIN_THRESHOLD && lgN <= GPU_MAX_THRESHOLD) {
+        cu_fft62_ifft(dst, src, lgN, get_mod_num(cu_zz_moduli, i));
+      } else {
+        fft62_ifft(dst, points, src, lgN, mod, threads2);
+      }
+      // printf("fft output %d: \n", i);
+      // for (int i = 0; i < (1 << lgN); ++i) {
+      //   // printf("%lu, ", dst[i] % mod->p);
+      //   printf("%lu, ", dst[i] % mod->p);
+      // }
+      // printf("\n");
+      // assert(2 == 3);
 	{
+    // assert(2 == 3);
 	  // divide by 2^lgN
 	  uint64_t p = mod->p;
 	  uint64_t pinv = mod->pinv;
@@ -455,7 +500,8 @@ void zz_mpnfft_poly_mul(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op1,
   // unsigned threads2 = threads / teams;
 
 //#pragma omp parallel for num_threads(teams) schedule(static)
-  for (unsigned i = 0; i < num_primes; i++)
+  // for (unsigned i = 0; i < num_primes; i++)
+  for (unsigned i = 0; i < 1; i++)
     {
       fft62_mod_t* mod = &moduli->fft62_mod[i];
       uint64_t* src1 = op1->data[i];

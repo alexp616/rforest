@@ -88,6 +88,12 @@ static inline int mod62_valid(uint64_t p)
   return (p & 1) && (p > 0x2000000000000000ULL) && (p < 0x4000000000000000ULL);
 }
 
+// // checks conditions on p
+// static inline int mod62_valid(uint64_t p)
+// {
+//   return (p & 1) && (p < 0x2000000000000000ULL);
+// }
+
 
 // x in [0, 2p)
 // returns x / 2 mod p, in [0, 2p)
@@ -299,11 +305,6 @@ mod62_mul_pinvb(uint64_t x, uint64_t y, uint64_t p, uint64_t pinvb)
 uint64_t mod62_pow(uint64_t x, uint64_t n, uint64_t p);
 
 
-// x in [0, p), n >= 0
-// returns x^n mod p, in [0, p)
-uint64_t mod62_pow_pinv(uint64_t x, uint64_t n, uint64_t p, uint64_t pinv);
-
-
 // returns 2^k mod p in [0, p)
 // (negative k is allowed)
 uint64_t mod62_2exp(int k, uint64_t p, uint64_t pinv);
@@ -320,6 +321,54 @@ void mod62_xgcd(uint64_t* d, uint64_t* s, uint64_t* t, uint64_t x, uint64_t y);
 // n > 0, any x
 // returns inverse of x mod n, or 0 if no inverse exists
 uint64_t mod62_inv(uint64_t x, uint64_t n);
+
+
+// x in [0, p), n >= 0
+// returns x^n mod p, in [0, p)
+static inline uint64_t mod62_pow_pinv(uint64_t x, uint64_t n, uint64_t p, uint64_t pinv)
+{
+  if (n == 0)
+    return 1;
+
+  if (n == 1)
+    return x;
+
+  if (n == 2)
+    return mod62_mul_pinv(x, x, p, pinv);
+
+  uint64_t u = x;         // x^(2^i), in [0, 2p)
+
+  // reduce to case n odd
+
+  for (; !(n & 1); n >>= 1)
+    u = mod62_mul_pinv_lazy2(u, u, p, pinv);
+
+  // handle rest of bits of n
+
+  uint64_t acc = u;       // accumulator, in [0, 2p)
+
+  for (n >>= 1; n != 0; n >>= 1)
+    {
+      u = mod62_mul_pinv_lazy2(u, u, p, pinv);
+      if (n & 1)
+	acc = mod62_mul_pinv_lazy2(acc, u, p, pinv);
+    }
+
+  return mod63_reduce2(acc, p);
+}
+
+
+// 2^LGNth primitive root of p
+static inline uint64_t fft62_primitive_root_2(uint64_t p, uint64_t pinv, int LGN) {
+  uint64_t N = (uint64_t) 1 << LGN;
+
+  for (uint64_t u = 2; ; u++)
+    {
+      uint64_t w = mod62_pow_pinv(u, (p - 1) / N, p, pinv);
+      if (mod62_pow_pinv(w, N / 2, p, pinv) != 1)
+	return w;
+    }
+}
 
 
 #endif
