@@ -6,8 +6,9 @@
 #include "zzmem.h"
 #include "hwmem.h"
 #include "hwmpz.h"
+#include <sys/time.h>
 
-#define HW_ZZ_PRIMES            2
+#define HW_ZZ_PRIMES            1
 
 int hw_disable_fft;
 int mpzfft_threads = 1; // setting this to a value other than 1 is typically not all that helpful (better to parallelize at a higher level)
@@ -81,11 +82,15 @@ static inline size_t mpz_rmatrix_product_max_bits (mpz_t *A, int r, mpz_t *B, in
     return GMP_NUMB_BITS*(2*m+1);   // note that the +1 limb more than covers the extra log(d) bits due to additions
 }
 
+static inline double get_time (void)
+    { struct timeval time;  gettimeofday(&time, NULL);  return time.tv_sec + time.tv_usec / 1000000.0; }
+
 mpz_t *mpz_rmatrix_mult_fft (mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w)
 {
     mpzfft_params_t params;
     mpzfft_t *AT, *BT;
     assert ( mpzfft_initialized );
+    double t = get_time();
     
     mpzfft_params_init (&params, mpz_rmatrix_product_max_bits (A, r, B, d), d, HW_ZZ_PRIMES, &zz_moduli);
 
@@ -106,6 +111,8 @@ mpz_t *mpz_rmatrix_mult_fft (mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w
     hw_free (BT, d*d*sizeof(mpzfft_t));
 
     mpzfft_params_clear (&params);
+    printf ("CPU Took %.3fs\n", get_time()-t);
+
     return C;
 }
 
@@ -113,6 +120,7 @@ mpz_t* mpz_rmatrix_mult_fft2(mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w
 {
     mpzfft_params_t params;
     assert ( mpzfft_initialized );
+    double t = get_time();
     
     mpzfft_params_init2 (&params, mpz_rmatrix_product_max_bits (A, r, B, d), d, HW_ZZ_PRIMES, &zz_moduli);
 
@@ -150,8 +158,10 @@ mpz_t* mpz_rmatrix_mult_fft2(mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w
         zz_mpnfft_mpn_to_poly2(Bdata, &params, B[i]->_mp_d, mpz_size(B[i]), mpz_sgn(B[i]), 0, 0, 1);
     }
 
-    zz_mpnfft_poly_fft2(Aptr, &params, Asz_0);
-    zz_mpnfft_poly_fft2(Bptr, &params, Bsz_0);
+    uint64_t* d_Aptr = zz_mpnfft_poly_fft2(Aptr, &params, Asz_0);
+    uint64_t* d_Bptr = zz_mpnfft_poly_fft2(Bptr, &params, Bsz_0);
+
+    hw_free(Bptr, Bsz_0 * params.num_primes * sizeof(uint64_t));
 
     // printf("after fft, n: %lu\n", params.N);
     // for (unsigned i = 0; i < HW_ZZ_PRIMES; ++i) {
@@ -161,12 +171,9 @@ mpz_t* mpz_rmatrix_mult_fft2(mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w
     //         } printf("\n\n");
     //     }
     // } printf("\n\n\n");
-
-    mpzfft_matrix_mul2(Aptr, Aptr, Bptr, r, d, d, HW_ZZ_PRIMES, params.N);
-
-    for (int j = 0; j < HW_ZZ_PRIMES; ++j) {
-        Adata[j] = Aptr + j * Asz_0;
-    }
+    
+    mpzfft_matrix_mul2(d_Aptr, d_Aptr, d_Bptr, r, d, d, HW_ZZ_PRIMES, params.N);
+    
     // printf("after matmul, n: %lu\n", params.N);
     // for (unsigned i = 0; i < HW_ZZ_PRIMES; ++i) {
     //     for (int k = 0; k < r * d; ++k) {
@@ -176,9 +183,7 @@ mpz_t* mpz_rmatrix_mult_fft2(mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w
     //     }
     // } printf("\n\n\n");
 
-    hw_free(Bptr, Bsz_0 * params.num_primes * sizeof(uint64_t));
-    
-    zz_mpnfft_poly_ifft2(Aptr, &params, Asz_0);
+    zz_mpnfft_poly_ifft2(Aptr, d_Aptr, &params, Asz_0);
 
     // printf("after ifft, n: %lu\n", params.N);
     // for (int k = 0; k < r * d; ++k) {
@@ -188,7 +193,9 @@ mpz_t* mpz_rmatrix_mult_fft2(mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w
     //         } printf("\n\n");
     //     }
     // } printf("\n\n\n");
-
+    for (int j = 0; j < HW_ZZ_PRIMES; ++j) {
+        Adata[j] = Aptr + j * Asz_0;
+    }
     for (int i = 0; i < r * d; ++i) {
         size_t start = i * params.N;
         for (int j = 0; j < HW_ZZ_PRIMES; ++j) {
@@ -200,8 +207,9 @@ mpz_t* mpz_rmatrix_mult_fft2(mpz_t *C, mpz_t *A, int r, mpz_t *B, int d, mpz_t w
     }
     
     hw_free(Aptr, Asz_0 * params.num_primes * sizeof(uint64_t));
-
+    printf ("GPU Took %.3fs\n", get_time()-t);
     mpzfft_params_clear (&params);
+
     // gmp_printf("C[0]: %Zd", C[0]);
     return C;
 }

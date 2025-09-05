@@ -103,8 +103,8 @@ void matmul_test2() {
 void matmul_test3() {
     hw_mpz_setup();
 
-    int r = 8;
-    int d = 8;
+    int r = 100;
+    int d = 100;
 
     mpz_t* A = malloc(r * d * sizeof(mpz_t));
     mpz_t* B = malloc(d * d * sizeof(mpz_t));
@@ -131,7 +131,7 @@ void matmul_test3() {
 
     mpz_t w; mpz_init(w);
     // printf("--------------------------------------------------- original impl: \n");
-    mpz_rmatrix_mult_fft3(C2, A, r, B, d, w);
+    mpz_rmatrix_mult_fft(C2, A, r, B, d, w);
     // printf("--------------------------------------------------- experimental impl: \n");
     mpz_rmatrix_mult_fft2(C1, A, r, B, d, w);
     

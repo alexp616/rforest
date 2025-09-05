@@ -180,7 +180,7 @@ void cu_fft62_ifft(uint64_t* yp, uint64_t* xp, unsigned lgN, cu_fft62_mod_t* mod
     return;
 }
 
-void cu_fft62_fft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz) {
+uint64_t* cu_fft62_fft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz) {
     assert(cu_mpzfft_initialized);
 
     uint64_t* d_data;
@@ -201,26 +201,16 @@ void cu_fft62_fft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_modu
         ptr += batch_size * N;
     }
 
-    cudaMemcpy(data, d_data, datasz * num_primes * sizeof(uint64_t), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_data);
-
-    return;
+    return d_data;
 }
 
-void cu_fft62_ifft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz) {
+void cu_fft62_ifft_batch(uint64_t* host_ptr, uint64_t* d_data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz) {
     assert(cu_mpzfft_initialized);
-
-    uint64_t* d_data;
-
-    cudaMalloc(&d_data, datasz * num_primes * sizeof(uint64_t));
-    cudaMemcpy(d_data, data, datasz * num_primes * sizeof(uint64_t), cudaMemcpyHostToDevice);
 
     uint64_t* ptr = d_data;
     int modIdx = lgN - GPU_MIN_THRESHOLD;
     unsigned N = 1 << lgN;
     int batch_size = datasz / N;
-
 
     for (int i = 0; i < num_primes; ++i) {
         cu_fft62_mod_t* fft_data = mod->fft62_mod[i];
@@ -230,8 +220,7 @@ void cu_fft62_ifft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_mod
         ptr += batch_size * N;
     }
 
-    cudaMemcpy(data, d_data, datasz * num_primes * sizeof(uint64_t), cudaMemcpyDeviceToHost);
-
+    cudaMemcpy(host_ptr, d_data, datasz * num_primes * sizeof(uint64_t), cudaMemcpyDeviceToHost);
     cudaFree(d_data);
 
     return;
@@ -289,17 +278,18 @@ __global__ void matmul_kernel(uint64_t* C, const uint64_t* B, uint64_t* aux, int
     return;
 }
 
-void cu_mpzfft_matrix_mul(uint64_t* C, uint64_t* A, uint64_t* B, int d1, int d2, int d3, int num_primes, int n, cu_zz_moduli_t* mod) {
+void cu_mpzfft_matrix_mul(uint64_t* d_C, uint64_t* d_A, uint64_t* d_B, int d1, int d2, int d3, int num_primes, int n, cu_zz_moduli_t* mod) {
     uint64_t* aux_row;
     cudaMalloc(&aux_row, d2 * n * sizeof(uint64_t));
+    assert (d_C == d_A);
 
-    uint64_t* d_A; uint64_t* d_B; uint64_t* d_C;
-    cudaMalloc(&d_A, d1 * d2 * n * num_primes * sizeof(uint64_t));
-    cudaMalloc(&d_B, d2 * d3 * n * num_primes * sizeof(uint64_t));
-    cudaMalloc(&d_C, d1 * d3 * n * num_primes * sizeof(uint64_t));
+    // uint64_t* d_A; uint64_t* d_B; uint64_t* d_C;
+    // cudaMalloc(&d_A, d1 * d2 * n * num_primes * sizeof(uint64_t));
+    // cudaMalloc(&d_B, d2 * d3 * n * num_primes * sizeof(uint64_t));
+    // cudaMalloc(&d_C, d1 * d3 * n * num_primes * sizeof(uint64_t));
     
-    cudaMemcpy(d_A, A, d1 * d2 * n * num_primes * sizeof(uint64_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_B, B, d2 * d3 * n * num_primes * sizeof(uint64_t), cudaMemcpyHostToDevice);
+    // cudaMemcpy(d_A, A, d1 * d2 * n * num_primes * sizeof(uint64_t), cudaMemcpyHostToDevice);
+    // cudaMemcpy(d_B, B, d2 * d3 * n * num_primes * sizeof(uint64_t), cudaMemcpyHostToDevice);
 
     int totalThreads = n * d3;
     int threads = min(totalThreads, 512);
@@ -321,9 +311,11 @@ void cu_mpzfft_matrix_mul(uint64_t* C, uint64_t* A, uint64_t* B, int d1, int d2,
         }
     }
 
-    cudaMemcpy(C, d_C, d1 * d3 * n * num_primes * sizeof(uint64_t), cudaMemcpyDeviceToHost);
+    // cudaMemcpy(C, d_C, d1 * d3 * n * num_primes * sizeof(uint64_t), cudaMemcpyDeviceToHost);
 
-    cudaFree(aux_row); cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
+    cudaFree(d_B);
+    cudaFree(aux_row);
+    // cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
     cuda_check();
     return;
 }

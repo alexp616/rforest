@@ -142,7 +142,7 @@ void free_if_gpu(unsigned lgN);
 void zz_mpnfft_poly_fft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
 			int threads);
 
-void zz_mpnfft_poly_fft2(uint64_t* data, zz_mpnfft_params_t* params, int datasz);
+uint64_t* zz_mpnfft_poly_fft2(uint64_t* data, zz_mpnfft_params_t* params, int datasz);
 
 // computes IFFT of op, writes result to rop (zero or "points" coefficients)
 // rop may alias op
@@ -150,7 +150,7 @@ void zz_mpnfft_poly_fft2(uint64_t* data, zz_mpnfft_params_t* params, int datasz)
 void zz_mpnfft_poly_ifft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
 			 int scale, int threads);
 
-void zz_mpnfft_poly_ifft2(uint64_t* data, zz_mpnfft_params_t* params, int datasz);
+void zz_mpnfft_poly_ifft2(uint64_t* host_ptr, uint64_t* data, zz_mpnfft_params_t* params, int datasz);
 
 // multiply fourier coefficients pointwise, rop := op1 * op2
 // all parameters may alias each other

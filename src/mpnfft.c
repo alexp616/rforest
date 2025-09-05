@@ -563,8 +563,8 @@ typedef struct cu_fft62_mod_t cu_fft62_mod_t;
 cu_fft62_mod_t* get_mod_num(cu_zz_moduli_t* mod, int i);
 extern void cu_fft62_fft(uint64_t* yp, uint64_t* xp, size_t size, unsigned lgN, cu_fft62_mod_t* mod);
 extern void cu_fft62_ifft(uint64_t* yp, uint64_t* xp, unsigned lgN, cu_fft62_mod_t* mod);
-extern void cu_fft62_fft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz);
-extern void cu_fft62_ifft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz);
+extern uint64_t* cu_fft62_fft_batch(uint64_t* data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz);
+extern void cu_fft62_ifft_batch(uint64_t* host_ptr, uint64_t* d_data, int num_primes, unsigned lgN, cu_zz_moduli_t* mod, int datasz);
 extern void gpu_alloc_mem(size_t n);
 extern void gpu_free_mem();
 
@@ -612,14 +612,12 @@ void zz_mpnfft_poly_fft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
   rop->size = points;
 }
 
-void zz_mpnfft_poly_fft2(uint64_t* data, zz_mpnfft_params_t* params, int datasz)
+uint64_t* zz_mpnfft_poly_fft2(uint64_t* data, zz_mpnfft_params_t* params, int datasz)
 {
   int num_primes = params->num_primes;
   size_t n = params->N;
   unsigned lgN = params->lgN;
-  cu_fft62_fft_batch(data, num_primes, lgN, cu_zz_moduli, datasz);
-
-  return;
+  return cu_fft62_fft_batch(data, num_primes, lgN, cu_zz_moduli, datasz);
 }
 
 void zz_mpnfft_poly_ifft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
@@ -666,13 +664,11 @@ void zz_mpnfft_poly_ifft(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op,
   rop->size = points;
 }
 
-void zz_mpnfft_poly_ifft2(uint64_t* data, zz_mpnfft_params_t* params, int datasz) {
+void zz_mpnfft_poly_ifft2(uint64_t* host_ptr, uint64_t* data, zz_mpnfft_params_t* params, int datasz) {
   int num_primes = params->num_primes;
   size_t n = params->N;
   unsigned lgN = params->lgN;
-  cu_fft62_ifft_batch(data, num_primes, lgN, cu_zz_moduli, datasz);
-
-  return;
+  cu_fft62_ifft_batch(host_ptr, data, num_primes, lgN, cu_zz_moduli, datasz);
 }
 
 void zz_mpnfft_poly_mul(zz_mpnfft_poly_t rop, zz_mpnfft_poly_t op1,
